@@ -1,0 +1,283 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  UNASSIGNED
+  STUDENT
+  ALUMNI
+  ADMIN
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  REVOKED
+}
+
+enum StudentStatus {
+  CURRENT_STUDENT
+  ALUMNI
+  PASSOUT
+}
+
+enum AcademicYear {
+  FY
+  SY
+  TY
+  LY
+  FIRST_YEAR
+  SECOND_YEAR
+}
+
+enum AccountStatus {
+  PENDING_REGISTRATION
+  PENDING_APPROVAL
+  ACTIVE
+  REJECTED
+  REVOKED
+}
+
+enum RequestStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+enum NotificationType {
+  MENTORSHIP_REQUEST
+  MENTORSHIP_ACCEPTED
+  MENTORSHIP_DECLINED
+  NEW_MESSAGE
+  NEW_INTERNSHIP
+  NEW_EVENT
+  ADMIN_VERIFIED
+}
+
+model User {
+  id             String        @id @default(cuid())
+  clerkId        String        @unique
+  email          String        @unique
+  name           String
+  role           Role          @default(UNASSIGNED)
+  accountStatus  AccountStatus @default(PENDING_REGISTRATION)
+  department     String?
+  graduationYear Int?
+  avatarUrl      String?
+  
+  // Critical Information Fields
+  mobile         String?
+  gender         String?
+  studentStatus  StudentStatus?
+  academicYear   AcademicYear?
+  division       String?
+  rollNumber     String?
+  prnNumber      String?
+  academicBatch  String?
+
+  revocationReason String?
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  studentProfile       StudentProfile?
+  alumniProfile        AlumniProfile?
+  registrationRequests RegistrationRequest[]
+  profileUpdateRequests ProfileUpdateRequest[]
+
+  sentRequests     MentorshipRequest[] @relation("StudentRequests")
+  receivedRequests MentorshipRequest[] @relation("AlumniRequests")
+
+  messagesSent           Message[]      @relation("MessageSender")
+  conversationsAsStudent Conversation[] @relation("ConversationStudent")
+  conversationsAsAlumni  Conversation[] @relation("ConversationAlumni")
+
+  postedInternships Internship[]
+  eventAttendees    EventAttendee[]
+  notifications     Notification[]
+}
+
+model StudentProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  skills          String[] @default([])
+  interests       String[] @default([])
+  careerGoals     String?
+  resumeUrl       String?
+  extractedSkills String[] @default([])
+  bio             String?
+  linkedinUrl     String?
+  githubUrl       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model AlumniProfile {
+  id                 String             @id @default(cuid())
+  userId             String             @unique
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  industry           String?
+  organization       String?
+  jobTitle           String?
+  expertiseAreas     String[]           @default([])
+  bio                String?
+  linkedinUrl        String?
+  verificationStatus VerificationStatus @default(PENDING)
+  yearsOfExperience  Int?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+}
+
+model MentorshipRequest {
+  id        String        @id @default(cuid())
+  studentId String
+  alumniId  String
+  student   User          @relation("StudentRequests", fields: [studentId], references: [id], onDelete: Cascade)
+  alumni    User          @relation("AlumniRequests", fields: [alumniId], references: [id], onDelete: Cascade)
+  status    RequestStatus @default(PENDING)
+  message   String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  conversation Conversation?
+
+  @@unique([studentId, alumniId])
+}
+
+model Conversation {
+  id                  String            @id @default(cuid())
+  studentId           String
+  alumniId            String
+  mentorshipRequestId String            @unique
+  student             User              @relation("ConversationStudent", fields: [studentId], references: [id], onDelete: Cascade)
+  alumni              User              @relation("ConversationAlumni", fields: [alumniId], references: [id], onDelete: Cascade)
+  mentorshipRequest   MentorshipRequest @relation(fields: [mentorshipRequestId], references: [id], onDelete: Cascade)
+  messages            Message[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  text           String
+  read           Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+}
+
+model Internship {
+  id          String    @id @default(cuid())
+  postedById  String
+  postedBy    User      @relation(fields: [postedById], references: [id], onDelete: Cascade)
+  title       String
+  company     String
+  description String
+  location    String?
+  type        String?
+  duration    String?
+  stipend     String?
+  applyLink   String?
+  applyEmail  String?
+  skills      String[]  @default([])
+  department  String?
+  deadline    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Event {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  date        DateTime
+  endDate     DateTime?
+  type        String
+  department  String?
+  venue       String?
+  onlineLink  String?
+  createdById String
+  attendees   EventAttendee[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model EventAttendee {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  read      Boolean          @default(false)
+  link      String?
+  createdAt DateTime         @default(now())
+}
+
+model RegistrationRequest {
+  id               String        @id @default(cuid())
+  userId           String
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Personal
+  fullName         String
+  email            String
+  mobile           String
+  gender           String?
+  // Status & Academic
+  studentStatus    StudentStatus
+  academicYear     AcademicYear?
+  department       String?
+  division         String?
+  rollNumber       String?
+  prnNumber        String?
+  academicBatch    String?
+  passingYear      Int?
+  // Admin decision
+  status           VerificationStatus @default(PENDING)
+  rejectionReason  String?
+  revocationReason String?
+  reviewedAt       DateTime?
+  reviewedById     String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([userId])
+}
+
+model ProfileUpdateRequest {
+  id               String             @id @default(cuid())
+  userId           String
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requestedChanges Json
+  status           VerificationStatus @default(PENDING)
+  rejectionReason  String?
+  reviewedAt       DateTime?
+  reviewedById     String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([userId])
+}
+
